@@ -1,0 +1,17 @@
+<html>
+  <body>
+    <script src="../dist/mock-socket.js"></script>
+    <script>
+      const socket = new WebSocket('ws://localhost:8080');
+      debugger;
+
+      socket.onmessage = function() {
+        debugger;
+      }
+
+      socket.onerror = function() {
+        debugger;
+      }
+    </script>
+  </body>
+</html>

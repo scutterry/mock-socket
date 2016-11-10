@@ -5,6 +5,7 @@ import CLOSE_CODES from './helpers/close-codes';
 import normalize from './helpers/normalize-url';
 import logger from './helpers/logger';
 import { createEvent, createMessageEvent, createCloseEvent } from './event-factory';
+import normalizeProtocol from './utils/normalize-protocol';
 
 /*
 * The main websocket class which is designed to mimick the native WebSocket class as close
@@ -13,6 +14,12 @@ import { createEvent, createMessageEvent, createCloseEvent } from './event-facto
 * https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
 */
 class WebSocket extends EventTarget {
+
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
   /*
   * @param {string} url
   */
@@ -22,17 +29,14 @@ class WebSocket extends EventTarget {
     if (!url) {
       throw new TypeError('Failed to construct \'WebSocket\': 1 argument required, but only 0 present.');
     }
+    else if (!url.include('ws://') && !url.include('ws://')) {
+      throw new Error(`Failed to construct 'WebSocket': The URL '${String(url)}' is invalid.`);
+    }
 
     this.binaryType = 'blob';
     this.url = normalize(url);
     this.readyState = WebSocket.CONNECTING;
-    this.protocol = '';
-
-    if (typeof protocol === 'string') {
-      this.protocol = protocol;
-    } else if (Array.isArray(protocol) && protocol.length > 0) {
-      this.protocol = protocol[0];
-    }
+    this.protocol = normalizeProtocol(protocol);
 
     /*
     * In order to capture the callback function we need to define custom setters.
@@ -73,6 +77,20 @@ class WebSocket extends EventTarget {
         get() { return this.listeners.error; },
         set(listener) {
           this.addEventListener('error', listener);
+        }
+      },
+      url: { writable: false },
+      protocol: { writable: false },
+      readyState: { writable: false },
+      bufferedAmount: { writable: false },
+      binaryType: {
+        set(value) {
+          if (['blob', 'arraybuffer'].indexOf(value) !== -1) {
+            this.binaryType = value;
+          }
+          else {
+            console.warn(`The provided value '${value.toString()}' is not a valid enum value of type BinaryType`);
+          }
         }
       }
     });
@@ -152,7 +170,15 @@ class WebSocket extends EventTarget {
   *
   * https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#close()
   */
-  close() {
+  close(code, reason) {
+    if (Number(code) === NaN) {
+      code = 0;
+    }
+
+    if (code !== 1000 && (code < 3000 || code > 4999)) {
+      throw new Error(`Failed to execute 'close' on 'WebSocket': The code must be either 1000, or between 3000 and 4999. ${code} is neither`); // Should be DOMException
+    }
+
     if (this.readyState !== WebSocket.OPEN) { return undefined; }
 
     const server = networkBridge.serverLookup(this.url);
@@ -171,11 +197,14 @@ class WebSocket extends EventTarget {
       server.dispatchEvent(closeEvent, server);
     }
   }
-}
 
-WebSocket.CONNECTING = 0;
-WebSocket.OPEN = 1;
-WebSocket.CLOSING = 2;
-WebSocket.CLOSED = 3;
+  static toString() {
+    return 'function WebSocket() { [native code] }';
+  }
+
+  toString() {
+    return '[object WebSocket]';
+  }
+}
 
 export default WebSocket;
