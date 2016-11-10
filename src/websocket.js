@@ -2,10 +2,9 @@ import delay from './helpers/delay';
 import EventTarget from './event-target';
 import networkBridge from './network-bridge';
 import CLOSE_CODES from './helpers/close-codes';
-import normalize from './helpers/normalize-url';
-import logger from './helpers/logger';
+import log from './helpers/logger';
 import { createEvent, createMessageEvent, createCloseEvent } from './event-factory';
-import normalizeProtocol from './utils/normalize-protocol';
+import { normalizeProtocol, normalizeUrl } from './utils/normalize';
 
 /*
 * The main websocket class which is designed to mimick the native WebSocket class as close
@@ -20,21 +19,18 @@ class WebSocket extends EventTarget {
   static CLOSING = 2;
   static CLOSED = 3;
 
-  /*
-  * @param {string} url
-  */
   constructor(url, protocol = '') {
     super();
 
     if (!url) {
       throw new TypeError('Failed to construct \'WebSocket\': 1 argument required, but only 0 present.');
     }
-    else if (!url.include('ws://') && !url.include('ws://')) {
+    else if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
       throw new Error(`Failed to construct 'WebSocket': The URL '${String(url)}' is invalid.`);
     }
 
     this.binaryType = 'blob';
-    this.url = normalize(url);
+    this.url = normalizeUrl(url);
     this.readyState = WebSocket.CONNECTING;
     this.protocol = normalizeProtocol(protocol);
 
@@ -79,10 +75,6 @@ class WebSocket extends EventTarget {
           this.addEventListener('error', listener);
         }
       },
-      url: { writable: false },
-      protocol: { writable: false },
-      readyState: { writable: false },
-      bufferedAmount: { writable: false },
       binaryType: {
         set(value) {
           if (['blob', 'arraybuffer'].indexOf(value) !== -1) {
@@ -94,8 +86,6 @@ class WebSocket extends EventTarget {
         }
       }
     });
-
-    const server = networkBridge.attachWebSocket(this, this.url);
 
     /*
     * This delay is needed so that we dont trigger an event before the callbacks have been
@@ -112,13 +102,15 @@ class WebSocket extends EventTarget {
     * // registered :-)
     */
     delay(function delayCallback() {
+      const server = networkBridge.attachWebSocket(this, this.url);
+
       if (server) {
-        if (server.options.verifyClient
-          && typeof server.options.verifyClient === 'function'
-          && !server.options.verifyClient()) {
+        const { options } = server;
+
+        if (options.verifyClient && typeof options.verifyClient === 'function' && !options.verifyClient()) {
           this.readyState = WebSocket.CLOSED;
 
-          logger(
+          log(
             'error',
             `WebSocket connection to '${this.url}' failed: HTTP Authentication failed; no valid credentials available`
           );
@@ -136,7 +128,7 @@ class WebSocket extends EventTarget {
         this.dispatchEvent(createEvent({ type: 'error', target: this }));
         this.dispatchEvent(createCloseEvent({ type: 'close', target: this, code: CLOSE_CODES.CLOSE_NORMAL }));
 
-        logger('error', `WebSocket connection to '${this.url}' failed`);
+        log('error', `WebSocket connection to '${this.url}' failed`);
       }
     }, this);
   }

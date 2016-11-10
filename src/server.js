@@ -2,7 +2,7 @@ import WebSocket from './websocket';
 import EventTarget from './event-target';
 import networkBridge from './network-bridge';
 import CLOSE_CODES from './helpers/close-codes';
-import normalize from './helpers/normalize-url';
+import { normalizeUrl } from './utils/normalize';
 import globalObject from './helpers/global-object';
 import { createEvent, createMessageEvent, createCloseEvent } from './event-factory';
 
@@ -15,7 +15,7 @@ class Server extends EventTarget {
   */
   constructor(url, options = {}) {
     super();
-    this.url = normalize(url);
+    this.url = normalizeUrl(url);
     this.originalWebSocket = null;
     const server = networkBridge.attachServer(this, this.url);
 
