@@ -9,15 +9,15 @@ test('that normalizeProtocol correctly normalizes the protocol', (t) => {
   t.is(normalizeProtocol(['foo', 'bar']), 'foo');
   t.is(normalizeProtocol(), '');
   t.is(normalizeProtocol([]), '');
+  t.throws(() => normalizeProtocol(Symbol('foo')), 'Cannot convert a Symbol value to a string');
   t.throws(
-    () => { normalizeProtocol(Symbol());
-  }, 'Cannot convert a Symbol value to a string');
-  t.throws(() => {
-    normalizeProtocol({});
-  }, 'Failed to construct \'WebSocket\': The subprotocol \'[object Object]\' is invalid');
-  t.throws(() => {
-    normalizeProtocol('something bad');
-  }, 'Failed to construct \'WebSocket\': The subprotocol \'something bad\' is invalid');
+    () => normalizeProtocol({}),
+    'Failed to construct \'WebSocket\': The subprotocol \'[object Object]\' is invalid'
+  );
+  t.throws(
+    () => normalizeProtocol('something bad'),
+   'Failed to construct \'WebSocket\': The subprotocol \'something bad\' is invalid'
+  );
 });
 
 test('that normalizeUrl correctly adds a / to the url', (t) => {

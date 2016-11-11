@@ -8,7 +8,7 @@ const failedToLoad = 'loaded-amd-failed';
 
 function amdLoader() {
   return `
-    requirejs(["dist/main"], function(mockSocket) {
+    requirejs(["Mock"], function(mockSocket) {
       // TODO if things are loaded correctly write some value to the dom
 
       console.log('here');
@@ -22,7 +22,7 @@ function amdLoader() {
   `;
 }
 
-test.skip('the dist package can be loaded via a AMD loader like requireJS', (t) => {
+test.cb.skip('the dist package can be loaded via a AMD loader like requireJS', (t) => {
   const requireJS = fs.readFileSync(
     path.resolve(
       __dirname,
@@ -34,7 +34,7 @@ test.skip('the dist package can be loaded via a AMD loader like requireJS', (t) 
   const mockSocket = fs.readFileSync(
     path.resolve(
       __dirname,
-      '../../dist/main.js'
+      '../../dist/mock-socket.js'
     ),
     'utf-8'
   );
@@ -55,6 +55,7 @@ test.skip('the dist package can be loaded via a AMD loader like requireJS', (t) 
 
       // console.log(window.require.s.contexts._.defined);
       t.is(window.document.getElementById('amd-loader').innerHTML, successfullyLoaded);
+      t.end();
     }
   });
 });

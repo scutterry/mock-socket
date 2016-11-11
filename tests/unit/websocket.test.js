@@ -16,35 +16,26 @@ test('that incorrect parameters throw the correct errors', (t) => {
 
   t.throws(
     () => { new WebSocket('invalid-urlws://'); },
-    'Failed to construct \'WebSocket\': The URL \'invalid-urlws:\/\/\' is invalid.'
+    'Failed to construct \'WebSocket\': The URL \'invalid-urlws://\' is invalid.'
   );
 });
 
 test('that websocket has the correct properties', (t) => {
   t.plan(6);
 
-  const staticProperties = [];
+  const ws = new WebSocket('ws://not-real');
 
-  for (const staticProperty in WebSocket) {
-    staticProperties.push(staticProperty);
-  }
-
-  t.is(staticProperties.length, 4);
-  t.true(staticProperties.includes('CONNECTING'));
-  t.true(staticProperties.includes('OPEN'));
-  t.true(staticProperties.includes('CLOSING'));
-  t.true(staticProperties.includes('CLOSED'));
-
-  const instanceProperties = [];
-
-  for (const instanceProperty in new WebSocket('ws://foo-bar')) {
-    instanceProperties.push(instanceProperty);
-  }
-
-  t.is.skip(instanceProperties.length, 19);
+  t.is(typeof WebSocket.CONNECTING, 'number');
+  t.is(typeof WebSocket.OPEN, 'number');
+  t.is(typeof WebSocket.CLOSING, 'number');
+  t.is(typeof WebSocket.CLOSED, 'number');
+  t.is(typeof ws.send, 'function');
+  t.is(typeof ws.close, 'function');
 });
 
 test('that on(open, message, error, and close) can be set', (t) => {
+  t.plan(4);
+
   const mySocket = new WebSocket('ws://not-real');
 
   mySocket.onopen = () => {};
@@ -60,10 +51,14 @@ test('that on(open, message, error, and close) can be set', (t) => {
   t.is(listeners.error.length, 1);
 });
 
-test('that sending when the socket is closed throws an expection', (t) => {
-  const mySocket = new WebSocket('ws://not-real', 'foo');
-  mySocket.readyState = WebSocket.CLOSED;
-  t.throws(() => {
-    mySocket.send('testing');
-  }, 'WebSocket is already in CLOSING or CLOSED state', 'an expection is thrown when sending while closed');
+test('that the correct default values are set after creation', (t) => {
+  t.plan(5);
+
+  const mySocket = new WebSocket('ws://not-real');
+
+  t.is(mySocket.binaryType, 'blob');
+  t.is(mySocket.readyState, WebSocket.CONNECTING);
+  t.is(mySocket.url, 'ws://not-real/');
+  t.is(mySocket.protocol, '');
+  t.is(mySocket.extensions, '');
 });

@@ -32,7 +32,7 @@ test('that callback functions can be added to the listeners object', (t) => {
   myServer.close();
 });
 
-test('that calling clients() returns the correct clients', (t) => {
+test.skip('that calling clients() returns the correct clients', (t) => {
   const myServer = new Server('ws://not-real/');
   const socketFoo = new WebSocket('ws://not-real/');
   const socketBar = new WebSocket('ws://not-real/');

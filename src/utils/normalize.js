@@ -4,8 +4,7 @@ export function normalizeProtocol(protocol = '') {
   if (Array.isArray(protocol)) {
     if (protocol.length > 0) {
       activeProtocol = protocol[0];
-    }
-    else {
+    } else {
       activeProtocol = '';
     }
   }

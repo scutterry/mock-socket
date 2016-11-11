@@ -19,20 +19,26 @@ class WebSocket extends EventTarget {
   static CLOSING = 2;
   static CLOSED = 3;
 
-  constructor(url, protocol = '') {
+  constructor(...args) {
     super();
 
-    if (!url) {
+    if (args.length === 0) {
       throw new TypeError('Failed to construct \'WebSocket\': 1 argument required, but only 0 present.');
     }
-    else if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+
+    const [url, protocol = ''] = args;
+
+    if (typeof url !== 'string' || (!url.startsWith('ws://') && !url.startsWith('wss://'))) {
       throw new Error(`Failed to construct 'WebSocket': The URL '${String(url)}' is invalid.`);
     }
 
-    this.binaryType = 'blob';
+    let binaryType = 'blob';
+
     this.url = normalizeUrl(url);
+    this.extensions = ''; // TODO: implement this
     this.readyState = WebSocket.CONNECTING;
     this.protocol = normalizeProtocol(protocol);
+    this.toString = () => '[object WebSocket]';
 
     /*
     * In order to capture the callback function we need to define custom setters.
@@ -76,12 +82,16 @@ class WebSocket extends EventTarget {
         }
       },
       binaryType: {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return binaryType;
+        },
         set(value) {
           if (['blob', 'arraybuffer'].indexOf(value) !== -1) {
-            this.binaryType = value;
-          }
-          else {
-            console.warn(`The provided value '${value.toString()}' is not a valid enum value of type BinaryType`);
+            binaryType = value;
+          } else {
+            log('warn', `The provided value '${value.toString()}' is not a valid enum value of type BinaryType`);
           }
         }
       }
@@ -162,13 +172,21 @@ class WebSocket extends EventTarget {
   *
   * https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#close()
   */
-  close(code, reason) {
-    if (Number(code) === NaN) {
+  close(code, reason = '') {
+    if (!code) {
+      code = 1000;
+    }
+
+    if (isNaN(code)) {
       code = 0;
     }
 
     if (code !== 1000 && (code < 3000 || code > 4999)) {
-      throw new Error(`Failed to execute 'close' on 'WebSocket': The code must be either 1000, or between 3000 and 4999. ${code} is neither`); // Should be DOMException
+      // Should be DOMException
+      throw new Error(
+        `Failed to execute 'close' on 'WebSocket':
+        The code must be either 1000, or between 3000 and 4999. ${code} is neither`
+      );
     }
 
     if (this.readyState !== WebSocket.OPEN) { return undefined; }
@@ -177,7 +195,8 @@ class WebSocket extends EventTarget {
     const closeEvent = createCloseEvent({
       type: 'close',
       target: this,
-      code: CLOSE_CODES.CLOSE_NORMAL
+      code: CLOSE_CODES.CLOSE_NORMAL,
+      reason
     });
 
     networkBridge.removeWebSocket(this, this.url);
@@ -192,10 +211,6 @@ class WebSocket extends EventTarget {
 
   static toString() {
     return 'function WebSocket() { [native code] }';
-  }
-
-  toString() {
-    return '[object WebSocket]';
   }
 }
 
