@@ -2,47 +2,95 @@ import delay from './helpers/delay';
 import EventTarget from './event-target';
 import networkBridge from './network-bridge';
 import CLOSE_CODES from './helpers/close-codes';
-import normalize from './helpers/normalize-url';
+import { isValid, normalize, correctScheme } from './helpers/url';
+import { parse } from 'url';
 import logger from './helpers/logger';
 import { createEvent, createMessageEvent, createCloseEvent } from './event-factory';
+
+const ERROR_PREFIX_CONSTRUCT = `Failed to construct 'WebSocket':`;
+const ERROR_CLASS = typeof DOMException !== 'undefined' ? DOMException : TypeError;
 
 /*
 * The main websocket class which is designed to mimick the native WebSocket class as close
 * as possible.
 *
 * https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
+* https://html.spec.whatwg.org/multipage/comms.html#network
 */
 class WebSocket extends EventTarget {
-  /*
-  * @param {string} url
-  */
-  constructor(url, protocol = '') {
+  constructor(url, protocols = '') {
     super();
 
-    if (!url) {
-      throw new TypeError('Failed to construct \'WebSocket\': 1 argument required, but only 0 present.');
+    if (typeof url === 'undefined') {
+      throw new ERROR_CLASS(`${ERROR_PREFIX_CONSTRUCT} 1 argument required, but only 0 present.`);
     }
 
-    this.binaryType = 'blob';
-    this.url = normalize(url);
-    this.readyState = WebSocket.CONNECTING;
-    this.protocol = '';
+    const parsedURL = parse(url.toString());
 
-    if (typeof protocol === 'string') {
-      this.protocol = protocol;
-    } else if (Array.isArray(protocol) && protocol.length > 0) {
-      this.protocol = protocol[0];
+    if (!parsedURL.hostname) {
+      throw new ERROR_CLASS(`${ERROR_PREFIX_CONSTRUCT} The URL '${url.toString()}' is invalid.`);
     }
+
+    if (!parsedURL.protocol.includes('ws:') && !parsedURL.protocol.includes('wss:')) {
+      throw new ERROR_CLASS(`${ERROR_PREFIX_CONSTRUCT} The URL's scheme must be either 'ws' or 'wss'. '${parsedURL.protocol.slice(0, -1)}' is not allowed.`);
+    }
+
+    if (parsedURL.hash) {
+      throw new ERROR_CLASS(`${ERROR_PREFIX_CONSTRUCT} The URL contains a fragment identifier ('${parsedURL.hash.substr(1)}'). Fragment identifiers are not allowed in WebSocket URLs.`);
+    }
+
+    if (Array.isArray(protocols)) {
+      const seenProtocols = {};
+
+      // TODO: add ability to only allow certain protocols
+      protocols.forEach(p => {
+        if (seenProtocols[p]) {
+          throw new ERROR_CLASS(`${ERROR_PREFIX_CONSTRUCT} The subprotocol '${p}' is duplicated.`);
+        }
+
+        seenProtocols[p] = true;
+      });
+    }
+
+    let binaryType = 'blob';
+    let readyState = WebSocket.CONNECTING;
+
+    this.CONNECTING = 0;
+    this.OPEN = 1;
+    this.CLOSING = 2;
+    this.CLOSED = 3;
 
     /*
     * In order to capture the callback function we need to define custom setters.
-    * To illustrate:
+    * To illustrat:
     *   mySocket.onopen = function() { alert(true) };
     *
     * The only way to capture that function and hold onto it for later is with the
     * below code:
     */
     Object.defineProperties(this, {
+      url: {
+        enumerable: true,
+        value: normalize(url)
+      },
+      readyState: {
+        configurable: true, // TODO: see about making this private
+        enumerable: true,
+        get() {
+          return readyState;
+        },
+        set(value) {
+          readyState = value;
+          return value;
+        }
+      },
+      bufferedAmount: {
+        configurable: true, // TODO: see about making this private
+        enumerable: true,
+        get() {
+          return 0;
+        }
+      },
       onopen: {
         configurable: true,
         enumerable: true,
@@ -51,12 +99,12 @@ class WebSocket extends EventTarget {
           this.addEventListener('open', listener);
         }
       },
-      onmessage: {
+      onerror: {
         configurable: true,
         enumerable: true,
-        get() { return this.listeners.message; },
+        get() { return this.listeners.error; },
         set(listener) {
-          this.addEventListener('message', listener);
+          this.addEventListener('error', listener);
         }
       },
       onclose: {
@@ -67,12 +115,35 @@ class WebSocket extends EventTarget {
           this.addEventListener('close', listener);
         }
       },
-      onerror: {
+      extensions: {
+        enumerable: true,
+        value: ''
+      },
+      protocol: {
+        enumerable: true,
+        value: Array.isArray(protocols) && protocol.length > 0 ? protocols[0] : String(protocols)
+      },
+      onmessage: {
         configurable: true,
         enumerable: true,
-        get() { return this.listeners.error; },
+        get() { return this.listeners.message; },
         set(listener) {
-          this.addEventListener('error', listener);
+          this.addEventListener('message', listener);
+        }
+      },
+      binaryType: {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return binaryType;
+        },
+        set(value) {
+          if (value === 'blob' || value === 'arraybuffer') {
+            binaryType = value;
+            return binaryType;
+          }
+
+          console.warn(`The provided value '${value.toString()}' is not a valid enum value of type BinaryType.`);
         }
       }
     });
@@ -129,20 +200,38 @@ class WebSocket extends EventTarget {
   * https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#send()
   */
   send(data) {
-    if (this.readyState === WebSocket.CLOSING || this.readyState === WebSocket.CLOSED) {
-      throw new Error('WebSocket is already in CLOSING or CLOSED state');
+    if (this.readyState === WebSocket.CONNECTING) {
+      throw new DOMException('TODO TODO');
     }
 
-    const messageEvent = createMessageEvent({
-      type: 'message',
-      origin: this.url,
-      data
-    });
+    if (this.readyState === WebSocket.OPEN) {
 
-    const server = networkBridge.serverLookup(this.url);
+      if (typeof data === 'string') {
+        this.bufferedAmount += lengthInUTF8Bytes(data);
+      }
 
-    if (server) {
-      server.dispatchEvent(messageEvent, data);
+      if (typeof data === 'blob') { // TODO fix me
+        this.bufferedAmount += data.size;
+      }
+
+      if (typeof data === 'arraybuffer') { // TODO fix me
+        this.bufferedAmount += data.byteLength;
+      }
+
+
+      const messageEvent = createMessageEvent({
+        type: 'message',
+        origin: this.url,
+        data
+      });
+
+
+
+      const server = networkBridge.serverLookup(this.url);
+
+      if (server) {
+        server.dispatchEvent(messageEvent, data);
+      }
     }
   }
 
@@ -152,24 +241,34 @@ class WebSocket extends EventTarget {
   *
   * https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#close()
   */
-  close() {
-    if (this.readyState !== WebSocket.OPEN) { return undefined; }
+  close(code, reason) {
+    // Do nothing if the connection is already closed or closing
+    if (this.readyState === WebSocket.CLOSING || this.readyState === WebSocket.CLOSED) {
+      return;
+    }
+
+    this.readyState = CLOSING;
 
     const server = networkBridge.serverLookup(this.url);
+    networkBridge.removeWebSocket(this, this.url);
+
     const closeEvent = createCloseEvent({
       type: 'close',
       target: this,
-      code: CLOSE_CODES.CLOSE_NORMAL
+      code: CLOSE_CODES.CLOSE_NORMAL,
+      wasClean: true // TODO: fix this
     });
 
-    networkBridge.removeWebSocket(this, this.url);
-
-    this.readyState = WebSocket.CLOSED;
-    this.dispatchEvent(closeEvent);
-
+    // TODO why is this server check needed?
     if (server) {
       server.dispatchEvent(closeEvent, server);
     }
+
+    delay(function() {
+      this.readyState = CLOSED;
+      // TODO fire error event in some cases
+      this.dispatchEvent(closeEvent);
+    });
   }
 }
 

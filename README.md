@@ -46,13 +46,16 @@ const mockWebSocket = require('mock-socket').WebSocket;
 
 ```js
 // chat.js
-function Chat() {
-  const chatSocket = new WebSocket('ws://localhost:8080');
-  this.messages = [];
+class Chat {
+  constructor() {
+    const chatSocket = new WebSocket('ws://localhost:8080');
+    this.messages = [];
+    chatSocket.onmessage = this.onMessage.bind(this);
+  },
 
-  chatSocket.onmessage = (event) => {
+  onMessage(evt) {
     this.messages.push(event.data);
-  };
+  }
 }
 ```
 

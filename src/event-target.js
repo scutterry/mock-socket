@@ -6,10 +6,11 @@ import { reject, filter } from './helpers/array-helpers';
 *
 * https://developer.mozilla.org/en-US/docs/Web/API/EventTarget
 */
-class EventTarget {
+const listeners = new WeakMap();
 
+class EventTarget {
   constructor() {
-    this.listeners = {};
+    listeners.set(this, {});
   }
 
   /*
@@ -22,13 +23,13 @@ class EventTarget {
   */
   addEventListener(type, listener /* , useCapture */) {
     if (typeof listener === 'function') {
-      if (!Array.isArray(this.listeners[type])) {
-        this.listeners[type] = [];
+      if (!Array.isArray(listener.get(this)[type])) {
+        listeners.get(this)[type] = [];
       }
 
       // Only add the same function once
-      if (filter(this.listeners[type], item => item === listener).length === 0) {
-        this.listeners[type].push(listener);
+      if (filter(listeners.get(this)[type], item => item === listener).length === 0) {
+        listeners.get(this)[type].push(listener);
       }
     }
   }
@@ -41,8 +42,8 @@ class EventTarget {
   * @param {boolean} useCapture - N/A TODO: implement useCapture functionality
   */
   removeEventListener(type, removingListener /* , useCapture */) {
-    const arrayOfListeners = this.listeners[type];
-    this.listeners[type] = reject(arrayOfListeners, listener => listener === removingListener);
+    const arrayOfListeners = listeners.get(this)[type];
+    listeners.get(this)[type] = reject(arrayOfListeners, listener => listener === removingListener);
   }
 
   /*
@@ -53,13 +54,13 @@ class EventTarget {
   */
   dispatchEvent(event, ...customArguments) {
     const eventName = event.type;
-    const listeners = this.listeners[eventName];
+    const eventListeners = listeners.get(this)[eventName];
 
-    if (!Array.isArray(listeners)) {
+    if (!Array.isArray(eventListeners)) {
       return false;
     }
 
-    listeners.forEach((listener) => {
+    eventListeners.forEach((listener) => {
       if (customArguments.length > 0) {
         listener.apply(this, customArguments);
       } else {
